@@ -1,17 +1,53 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
 const ideaModel = require('../models/idea_model');
 const authMiddleware = require('../middlewares/auth_middleware');
 const userModel = require('../models/user_model');
-const commentModel = require('../models/comment_model')
+const commentModel = require('../models/comment_model');
 
-// Routes
-// Rotta per ottenere tutte le idee (GET)
+// Rotta per ottenere le idee filtrate per genere e/o tipo, con commenti inclusi
 router.get('/idee', async (req, res) => {
   try {
-    const ideas = await ideaModel.find().populate('user'); // Trova tutte le idee
-    res.status(200).json(ideas); // Restituisci tutte le idee
+    const { genre, type } = req.query;
+
+    const allowedGenres = ['film', 'libri', 'musica'];
+    const allowedTypes = ['idea', 'supporto'];
+
+    if (genre && !allowedGenres.includes(genre)) {
+      return res.status(400).json({ message: 'Genere non valido' });
+    }
+
+    if (type && !allowedTypes.includes(type)) {
+      return res.status(400).json({ message: 'Tipo non valido' });
+    }
+
+    const filter = {};
+    if (genre) filter.genre = genre;
+    if (type) filter.type = type;
+
+    // Trova tutte le idee corrispondenti
+    const ideas = await ideaModel
+      .find(filter)
+      .sort({ dataCreazione: -1 })
+      .populate('user')
+      .lean(); // lean() per permettere l'aggiunta manuale di proprietà
+
+    // Per ogni idea, recupera i commenti associati
+    const ideasWithComments = await Promise.all(
+      ideas.map(async (idea) => {
+        const comments = await commentModel
+          .find({ idea: idea._id })
+          .populate('user', 'name email') // Popola anche l'utente del commento
+          .sort({ createdAt: 1 }); // Ordina i commenti dal più vecchio al più nuovo
+
+        return {
+          ...idea,
+          comments, // aggiungiamo l'array dei commenti alla singola idea
+        };
+      })
+    );
+
+    res.status(200).json(ideasWithComments);
   } catch (error) {
     console.error('Errore durante il recupero delle idee:', error);
     res.status(500).json({ message: 'Errore durante il recupero delle idee' });
@@ -22,13 +58,13 @@ router.get('/idee', async (req, res) => {
 router.get('/idee/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const idea = await ideaModel.findById(id).populate('user'); // Trova l'idea per ID
+    const idea = await ideaModel.findById(id).populate('user');
 
     if (!idea) {
       return res.status(404).json({ message: 'Idea non trovata' });
     }
 
-    res.status(200).json(idea); // Restituisci l'idea trovata
+    res.status(200).json(idea);
   } catch (error) {
     console.error('Errore durante il recupero dell\'idea:', error);
     res.status(500).json({ message: 'Errore durante il recupero dell\'idea' });
@@ -36,32 +72,23 @@ router.get('/idee/:id', async (req, res) => {
 });
 
 // Rotta per creare una nuova idea (POST)
-router.post('/idee', async (req, res) => {
+router.post('/idee', authMiddleware, async (req, res) => {
   try {
-    const { genre, type, content, user } = req.body;
+    const { genre, type, content } = req.body;
+    const userId = req.user.userId;
 
-    if (!genre || !type || !content || !user) {
+    if (!genre || !type || !content) {
       return res.status(400).json({ message: 'Dati mancanti' });
     }
 
-    // Verifica che l'utente esista nel database
-    const foundUser = await userModel.findById(user);
+    const foundUser = await userModel.findById(userId);
     if (!foundUser) {
       return res.status(404).json({ message: 'Utente non trovato' });
     }
 
-    // Creiamo una nuova idea
-    const newIdea = new ideaModel({
-      genre,
-      type,
-      content,
-      user,
-    });
-
-    // Salviamo l'idea nel database
+    const newIdea = new ideaModel({ genre, type, content, user: userId });
     const savedIdea = await newIdea.save();
 
-    // Restituiamo la risposta con l'idea appena creata
     res.status(201).json(savedIdea);
   } catch (error) {
     console.error('Errore durante la creazione dell\'idea:', error);
@@ -70,54 +97,34 @@ router.post('/idee', async (req, res) => {
 });
 
 // Aggiungi un commento a un'idea
-router.post('/idee/:ideaId/commenti', async (req, res) => {
+router.post('/idee/:ideaId/commenti', authMiddleware, async (req, res) => {
   try {
-    const { ideaId } = req.params;  // ID dell'idea nella URL
-    const { content } = req.body;   // Contenuto del commento inviato nel body della richiesta
-    const token = req.headers.authorization?.split(' ')[1];  // Token da Authorization header
+    const { ideaId } = req.params;
+    const { content } = req.body;
+    const userId = req.user.userId;
 
-    // Verifica la validità del token
-    if (!token) {
-      return res.status(401).json({ message: 'Token mancante o non valido' });
+    if (!content || content.trim() === '') {
+      return res.status(400).json({ message: 'Il commento non può essere vuoto' });
     }
 
-    // Decodifica il token per ottenere l'ID dell'utente
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secretkey');
-    const userId = decoded.userId;
-
-    // Recupera l'idea dal database
     const idea = await ideaModel.findById(ideaId);
     if (!idea) {
       return res.status(404).json({ message: 'Idea non trovata' });
     }
 
-    // Verifica che il contenuto del commento non sia vuoto
-    if (!content || content.trim() === '') {
-      return res.status(400).json({ message: 'Il commento non può essere vuoto' });
-    }
-
-    // Crea un nuovo commento
     const newComment = new commentModel({
       idea: ideaId,
       user: userId,
       content,
     });
 
-    // Salva il commento nel database
     await newComment.save();
 
-    // Inizializza l'array comments se è undefined
-    if (!idea.comments) {
-      idea.comments = [];  // Inizializza come array vuoto se non esiste
-    }
-
-    // Aggiungi il commento all'array di commenti dell'idea
+    idea.comments = idea.comments || [];
     idea.comments.push(newComment._id);
     await idea.save();
 
-    // Restituisci il commento appena creato
     res.status(201).json(newComment);
-
   } catch (error) {
     console.error('Errore durante l\'aggiunta del commento:', error);
     res.status(500).json({ message: 'Errore durante l\'aggiunta del commento' });
@@ -125,23 +132,28 @@ router.post('/idee/:ideaId/commenti', async (req, res) => {
 });
 
 // Rotta per aggiornare un'idea (PUT)
-router.put('/idee/:id', async (req, res) => {
+router.put('/idee/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { genre, type, content, user } = req.body;
+    const { genre, type, content } = req.body;
+    const userId = req.user.userId;
 
-    // Trova e aggiorna l'idea
-    const updatedIdea = await ideaModel.findByIdAndUpdate(
-      id,
-      { genre, type, content, user },
-      { new: true } // Restituisce l'idea aggiornata
-    );
-
-    if (!updatedIdea) {
+    const idea = await ideaModel.findById(id);
+    if (!idea) {
       return res.status(404).json({ message: 'Idea non trovata' });
     }
 
-    res.status(200).json(updatedIdea); // Restituisci l'idea aggiornata
+    if (idea.user.toString() !== userId) {
+      return res.status(403).json({ message: 'Non sei autorizzato ad aggiornare questa idea' });
+    }
+
+    idea.genre = genre ?? idea.genre;
+    idea.type = type ?? idea.type;
+    idea.content = content ?? idea.content;
+
+    const updatedIdea = await idea.save();
+
+    res.status(200).json(updatedIdea);
   } catch (error) {
     console.error('Errore durante l\'aggiornamento dell\'idea:', error);
     res.status(500).json({ message: 'Errore durante l\'aggiornamento dell\'idea' });
@@ -149,15 +161,21 @@ router.put('/idee/:id', async (req, res) => {
 });
 
 // Rotta per eliminare un'idea (DELETE)
-router.delete('/idee/:id', async (req, res) => {
+router.delete('/idee/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const deletedIdea = await ideaModel.findByIdAndDelete(id); // Trova e elimina l'idea per ID
+    const userId = req.user.userId;
 
-    if (!deletedIdea) {
+    const idea = await ideaModel.findById(id);
+    if (!idea) {
       return res.status(404).json({ message: 'Idea non trovata' });
     }
 
+    if (idea.user.toString() !== userId) {
+      return res.status(403).json({ message: 'Non sei autorizzato ad eliminare questa idea' });
+    }
+
+    await idea.deleteOne();
     res.status(200).json({ message: 'Idea eliminata con successo' });
   } catch (error) {
     console.error('Errore durante l\'eliminazione dell\'idea:', error);

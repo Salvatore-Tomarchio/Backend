@@ -7,8 +7,8 @@ const ideaSchema = new mongoose.Schema({
   type: { type: String, enum: ['idea', 'supporto'], required: true },
   content: { type: String, required: true },
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'Users' },
-  comment: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comments', default: [] }], // Corretto ref
-  upvotes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Users' }],    // NUOVO CAMPO
+  comment: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Comments', default: [] }],
+  upvotes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Users' }],
   dataCreazione: { type: Date, default: Date.now },
 });
 

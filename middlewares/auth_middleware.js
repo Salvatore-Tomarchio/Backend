@@ -2,26 +2,21 @@ const jwt = require('jsonwebtoken');
 
 // Middleware per verificare il token JWT
 const authMiddleware = (req, res, next) => {
-  // Estrai il token dall'header della richiesta
-  const token = req.header('Authorization')?.replace('Bearer ', '');
-  console.log('Token estratto:', token);  // Aggiungi un log per verificare che il token venga estratto correttamente
+  // Estrai il token dall'header Authorization (formato: "Bearer <token>")
+  const authHeader = req.header('Authorization');
+  const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
 
-  // Se non c'è il token, restituisci errore
   if (!token) {
     return res.status(401).json({ message: 'Token mancante, accesso negato' });
   }
 
   try {
-    // Verifica il token usando il segreto dal file .env
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded; // userId, iat, exp...
 
-    // Aggiungi i dati decodificati (come userId, email) alla richiesta
-    req.user = decoded;
-
-    // Continua con la richiesta
-    next();
+    next(); // Procedi alla rotta successiva
   } catch (err) {
-    // Se il token non è valido, restituisci errore
+    console.error('Errore nella verifica del token:', err.message);
     return res.status(401).json({ message: 'Token non valido' });
   }
 };
