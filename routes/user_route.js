@@ -37,13 +37,30 @@ router.post('/users', async (req, res, next) => {
           delete obj.googleId;  // Rimuove googleId se è null o undefined
         }
 
+        // Hash della password
         obj.password = await bcrypt.hash(obj.password, 10);
         console.log('Password hashata:', obj.password);
 
+        // Creazione dell'utente nel database
         const user = new userModel(obj);
         const dbUser = await user.save();
-        res.status(201).json(dbUser);
-    } catch(err) {
+
+        // Genera il token JWT
+        const token = jwt.sign(
+          {
+            userId: dbUser._id,
+            email: dbUser.email
+          },
+          process.env.JWT_SECRET, // Usa il segreto dal file .env
+          { expiresIn: '2h' } // Imposta la durata del token
+        );
+
+        // Risposta con l'utente creato e il token JWT
+        res.status(201).json({
+          user: dbUser,  // L'oggetto dell'utente appena creato
+          token: token   // Il token JWT generato
+        });
+    } catch (err) {
         next(err);
     }
 });
