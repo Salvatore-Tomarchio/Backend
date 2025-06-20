@@ -1,53 +1,3 @@
-// const passport = require('passport');
-// const GoogleStrategy = require('passport-google-oauth20').Strategy;
-// const userModel = require('../models/user_model');
-// require('dotenv').config();
-
-// // Configurazione della strategia Google
-// passport.use(new GoogleStrategy({
-//   clientID: process.env.GOOGLE_CLIENT_ID,
-//   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-//   callbackURL: 'http://localhost:3002/auth/google/callback',
-// },
-// async (accessToken, refreshToken, profile, done) => {
-//   try {
-//     // Cerca utente esistente con googleId
-//     let user = await userModel.findOne({ googleId: profile.id });
-
-//     // Se non esiste, crealo
-//     if (!user) {
-//       user = new userModel({
-//         googleId: profile.id,
-//         name: profile.displayName,
-//         email: profile.emails[0].value,
-//         age: 18,        // oppure chiedi età in un secondo momento
-//         password: '',   // non richiesta per Google login
-//       });
-//       await user.save();
-//     }
-
-//     // Passa l'utente a passport (senza creare token qui)
-//     return done(null, user);
-//   } catch (err) {
-//     console.error('Errore autenticazione Google:', err);
-//     return done(err, null);
-//   }
-// }));
-
-// // Serializzazione e deserializzazione dell’utente
-// passport.serializeUser((user, done) => {
-//   done(null, user.id);
-// });
-
-// passport.deserializeUser(async (id, done) => {
-//   try {
-//     const user = await userModel.findById(id);
-//     done(null, user);
-//   } catch (err) {
-//     done(err, null);
-//   }
-// });
-
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const userModel = require('../models/user_model');
@@ -84,8 +34,8 @@ async (accessToken, refreshToken, profile, done) => {
       googleId: profile.id,
       name: profile.displayName,
       email: (profile.emails && profile.emails[0]) ? profile.emails[0].value : '', // Fallback per email
-      age: 18,  // Età di default
-      password: '',  // Non necessaria per Google login
+      age: 18,
+      password: '', 
     });
 
     // Aggiungi una verifica per `googleId` prima di salvarlo

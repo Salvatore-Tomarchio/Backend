@@ -27,6 +27,7 @@ router.get('/users/:id', async (req, res, next) => {
     }
 })
 
+// Rotta per creare un'utente (POST)
 router.post('/users', async (req, res, next) => {
    try {
         const obj = req.body;
@@ -71,58 +72,7 @@ router.delete('/users/:id', async (req, res, next) => {
     }
 })
 
-// Rotta per il login utente (POST)
-// router.post('/login', async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-
-//     // Verifica che email e password siano forniti
-//     if (!email || !password) {
-//       return res.status(400).json({ message: 'Email e password obbligatorie' });
-//     }
-
-//     // Cerca l’utente nel DB
-//     const user = await userModel.findOne({ email });
-//     if (!user) {
-//       return res.status(404).json({ message: 'Utente non trovato' });
-//     }
-
-//     // Log per verificare i dati
-//     console.log('Password inviata:', password);
-//     console.log('Password salvata (hashata):', user.password);
-
-//     const isMath = await bcrypt.compare(password, user.password);
-//     console.log('Risultato confronto:', isMath);
-//     if (!isMath) {
-//       return res.status(401).json({ message: 'Password errata' });
-//     }
-
-//     // Confronta la password inviata con quella salvata (hashata)
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) {
-//       console.log('La password non corrisponde!');
-//       return res.status(401).json({ message: 'Password errata' });
-//     }
-
-//     // Genera il token JWT
-//     const token = jwt.sign(
-//       {
-//         userId: user._id,
-//         email: user.email
-//       },
-//       process.env.JWT_SECRET,
-//       { expiresIn: '2h' } // durata del token
-//     );
-
-//     // Risposta al client
-//     res.status(200).json({ token });
-
-//   } catch (error) {
-//     console.error('Errore login:', error);
-//     res.status(500).json({ message: 'Errore durante il login' });
-//   }
-// });
-
+// Rotta per il Login 
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -184,8 +134,6 @@ router.get('/users/me', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Errore interno del server' });
   }
 });
-
-
 
 // Esportare tutti gli endpoints creati
 module.exports = router;
